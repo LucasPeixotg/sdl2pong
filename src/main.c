@@ -1,4 +1,5 @@
 #include "constants.h"
+#include "gametime.h"
 
 // std
 #include <stdio.h>
@@ -12,27 +13,34 @@
 typedef struct player {
     float x;
     float y;
-    float height;
     int vel;
 } Player;
 
+extern int GAME_PAUSED;
+
 // global variables
 int game_is_running = FALSE;
+int game_is_paused = FALSE;
 SDL_Window* window = NULL;
 SDL_Renderer* renderer = NULL;
 Player player1;
 Player player2;
 
+struct score {
+    int player1;
+    int player2;
+} score;
+
 struct ball {
     float x;
     float y;
-    float velocity;
-    float angle;
+    float vx;
+    float vy;
     float width;
     float height;
-    float cos;
-    float sin;
 } ball;
+
+
 
 
 int initialize_window(void) {
@@ -76,6 +84,10 @@ void process_input(void) {
         case SDL_KEYDOWN:
             if(event.key.keysym.sym == SDLK_ESCAPE)
                 game_is_running = FALSE;
+            if(event.key.keysym.sym == SDLK_p){
+                if(GAME_PAUSED) unpause();
+                else pause();
+            }
             
             if(event.key.keysym.sym == SDLK_UP) {
                 player2.vel = -1;
@@ -108,46 +120,111 @@ void setup(void) {
 
     ball.x = WINDOW_WIDTH/2 - 15;
     ball.y = WINDOW_HEIGHT/2 - 7;
-    ball.velocity = 80;
-    ball.angle = ((float) rand() / (float) RAND_MAX) * (PI / 2) + (rand() > RAND_MAX/2 ? (3*PI/4) : (-PI/4));
-    ball.cos = cos(ball.angle);
-    ball.sin = sin(ball.angle);
-    ball.width = 15;
-    ball.height = 15;
+    ball.width = BALL_RADIUS * 2;
+    ball.height = BALL_RADIUS * 2;
+    float angle = ((float) rand() / (float) RAND_MAX) * (PI / 2) + (rand() > RAND_MAX/2 ? (3*PI/4) : (-PI/4));
+    ball.vx = cos(angle) * BALL_INITIAL_VELOCITY;
+    ball.vy = sin(angle) * BALL_INITIAL_VELOCITY;
     
     player1.x = 0;
     player1.y = WINDOW_HEIGHT / 2.0f;
-    player1.height = 60;
     
-    player2.x = WINDOW_WIDTH - 15;
+    player2.x = WINDOW_WIDTH - PAD_WIDTH;
     player2.y = WINDOW_HEIGHT / 2.0f;
-    player2.height = 60;
+    
+    score.player1 = 0;
+    score.player2 = 0;
+}
+
+void reset(void) {
+    ball.x = WINDOW_WIDTH/2 - 15;
+    ball.y = WINDOW_HEIGHT/2 - 7;
+    ball.width = 15;
+    ball.height = 15;
+    float angle = ((float) rand() / (float) RAND_MAX) * (PI / 2) + (rand() > RAND_MAX/2 ? (3*PI/4) : (-PI/4));
+    ball.vx = cos(angle) * BALL_INITIAL_VELOCITY;
+    ball.vy = sin(angle) * BALL_INITIAL_VELOCITY;
+}
+
+float get_ball_velocity(void) {
+    return sqrt(pow(ball.vx, 2) + pow(ball.vy, 2));
+}
+
+void squish_ball(void) {
+    float ball_velocity = get_ball_velocity();
+    ball.width = BALL_RADIUS*1.5 + abs((int) (BALL_RADIUS/3 * (ball.vx / ball_velocity))) * (ball_velocity/BALL_MAX_SPEED);
+    ball.height =BALL_RADIUS*1.5 + abs((int) (BALL_RADIUS/3 * (ball.vy / ball_velocity))) * (ball_velocity/BALL_MAX_SPEED);
+}
+
+void accelerate_ball(int horizontal, int vertical) {
+    if(horizontal && get_ball_velocity() < BALL_MAX_SPEED) {
+        ball.vx *= BALL_ACCELERATION;
+    }
+    if(vertical && get_ball_velocity() < BALL_MAX_SPEED) {
+        ball.vy *= BALL_ACCELERATION;
+    }
 }
 
 void update(void) {
     // TODO:
-    //  - ball bounce on walls
-    //  - ball bounce on players
-    //  - game over
+    //  - make colision detection a priori instead of a posteriori
+    //      as it is now and have some problems 
 
-    static int last_frame_time = 0;
+    float delta_time = get_delta_time();
 
-    float delta_time = (SDL_GetTicks() - last_frame_time) / 1000.0f;
-    last_frame_time = SDL_GetTicks();
+    ball.x += ball.vx * delta_time;
+    if(ball.x + ball.width >= WINDOW_WIDTH - PAD_WIDTH) {
+        if(ball.y >= player2.y && ball.y <= player2.y + PAD_HEIGHT) {
+            ball.x = WINDOW_WIDTH - PAD_WIDTH - ball.width;
+            ball.vx *= -1;
+            
+            accelerate_ball(TRUE, FALSE);
+        } else {
+            score.player1 += 1;
+            reset();
+        }
+    } else if(ball.x <= PAD_WIDTH) {
+        if(ball.y >= player1.y && ball.y <= player1.y + PAD_HEIGHT) {
+            ball.x = PAD_WIDTH;
+            ball.vx *= -1;
+            
+            accelerate_ball(TRUE, FALSE);
+        } else {
+            score.player2 += 1;
+            reset();
+        }
+    }
+    
+    ball.y += ball.vy * delta_time;
+    if(ball.y + ball.height >= WINDOW_HEIGHT) {
+        ball.y = WINDOW_HEIGHT - ball.height;
+        ball.vy *= -1;
+        
+        accelerate_ball(FALSE, TRUE);
+    } else if(ball.y <= 0) {
+        ball.y = 0;
+        ball.vy *= -1;
+        
+        accelerate_ball(FALSE, TRUE);
+    }
 
-    ball.x += ball.velocity * ball.cos * delta_time;
-    ball.y += ball.velocity * ball.sin * delta_time;
+    squish_ball();
 
-    player1.y += player1.vel * PLAYER_VEL * delta_time;
-    player2.y += player2.vel * PLAYER_VEL * delta_time;
+    player1.y += player1.vel * PAD_VEL * delta_time;
+    if(player1.y + PAD_HEIGHT > WINDOW_HEIGHT) player1.y = WINDOW_HEIGHT - PAD_HEIGHT;
+    else if(player1.y < 0) player1.y = 0;
+
+    player2.y += player2.vel * PAD_VEL * delta_time;
+    if(player2.y + PAD_HEIGHT > WINDOW_HEIGHT) player2.y = WINDOW_HEIGHT - PAD_HEIGHT;
+    else if(player2.y < 0) player2.y = 0;
 }
 
 void render_player(Player player) {
     SDL_Rect player_rect = {
         (int) player.x,
         (int) player.y,
-        15,
-        (int) player.height
+        PAD_WIDTH,
+        PAD_HEIGHT
     };
 
     SDL_SetRenderDrawColor(renderer, 200, 200, 50, 255);
@@ -156,7 +233,6 @@ void render_player(Player player) {
 
 void render(void) {
     // TODO:
-    //  - ball squish
     //  - particles
     //  - ball trace speed
 
@@ -173,14 +249,12 @@ void render(void) {
     SDL_SetRenderDrawColor(renderer, 120, 55, 90, 255);
     SDL_RenderFillRect(renderer, &middle_rect);
 
-
     SDL_Rect ball_rect = {
         (int) ball.x,
         (int) ball.y,
         (int) ball.width,
         (int) ball.height
     };
-
     SDL_SetRenderDrawColor(renderer, 90, 200, 200, 255);
     SDL_RenderFillRect(renderer, &ball_rect);
 
@@ -205,7 +279,7 @@ int main(void) {
 
     while(game_is_running) {
         process_input();
-        update();
+        if(!GAME_PAUSED) update();
         render();
     }
 
