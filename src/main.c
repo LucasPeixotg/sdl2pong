@@ -5,7 +5,6 @@
 #include <stdlib.h>
 #include <SDL2/SDL.h>
 
-#define _USE_MATH_DEFINE
 #include <math.h>
 
 #include <time.h>
