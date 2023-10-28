@@ -7,7 +7,6 @@
 #include <SDL2/SDL.h>
 
 #include <math.h>
-
 #include <time.h>
 
 typedef struct player {
@@ -122,15 +121,15 @@ void setup(void) {
     ball.y = WINDOW_HEIGHT/2 - 7;
     ball.width = BALL_RADIUS * 2;
     ball.height = BALL_RADIUS * 2;
-    float angle = ((float) rand() / (float) RAND_MAX) * (PI / 2) + (rand() > RAND_MAX/2 ? (3*PI/4) : (-PI/4));
-    ball.vx = cos(angle) * BALL_INITIAL_VELOCITY;
-    ball.vy = sin(angle) * BALL_INITIAL_VELOCITY;
+    //float angle = ((float) rand() / (float) RAND_MAX) * (PI / 2) + (rand() > RAND_MAX/2 ? (3*PI/4) : (-PI/4));
+    ball.vx = BALL_INITIAL_VELOCITY;//cos(angle) * BALL_INITIAL_VELOCITY;
+    ball.vy = 0;//sin(angle) * BALL_INITIAL_VELOCITY;
     
     player1.x = 0;
-    player1.y = WINDOW_HEIGHT / 2.0f;
+    player1.y = WINDOW_HEIGHT / 2.0f - PAD_HEIGHT/2.0f;
     
     player2.x = WINDOW_WIDTH - PAD_WIDTH;
-    player2.y = WINDOW_HEIGHT / 2.0f;
+    player2.y = WINDOW_HEIGHT / 2.0f - PAD_HEIGHT/2.0f;
     
     score.player1 = 0;
     score.player2 = 0;
@@ -152,17 +151,20 @@ float get_ball_velocity(void) {
 
 void squish_ball(void) {
     float ball_velocity = get_ball_velocity();
-    ball.width = BALL_RADIUS*1.5 + abs((int) (BALL_RADIUS/3 * (ball.vx / ball_velocity))) * (ball_velocity/BALL_MAX_SPEED);
-    ball.height =BALL_RADIUS*1.5 + abs((int) (BALL_RADIUS/3 * (ball.vy / ball_velocity))) * (ball_velocity/BALL_MAX_SPEED);
+    ball.width = BALL_RADIUS*1.5 + abs((int) (BALL_RADIUS/2 * (ball.vx / ball_velocity))) * (ball_velocity/BALL_MAX_SPEED);
+    ball.height =BALL_RADIUS*1.5 + abs((int) (BALL_RADIUS/2 * (ball.vy / ball_velocity))) * (ball_velocity/BALL_MAX_SPEED);
 }
 
 void accelerate_ball(int horizontal, int vertical) {
-    if(horizontal && get_ball_velocity() < BALL_MAX_SPEED) {
-        ball.vx *= BALL_ACCELERATION;
+    // TODO:
+    //  - add a bit of randomization to the movement
+    if(horizontal) {
+        if(get_ball_velocity() < BALL_MAX_SPEED) ball.vx *= BALL_ACCELERATION;
     }
-    if(vertical && get_ball_velocity() < BALL_MAX_SPEED) {
-        ball.vy *= BALL_ACCELERATION;
+    if(vertical) {
+        if(get_ball_velocity() < BALL_MAX_SPEED) ball.vy *= BALL_ACCELERATION;
     }
+
 }
 
 void update(void) {
@@ -174,7 +176,7 @@ void update(void) {
 
     ball.x += ball.vx * delta_time;
     if(ball.x + ball.width >= WINDOW_WIDTH - PAD_WIDTH) {
-        if(ball.y >= player2.y && ball.y <= player2.y + PAD_HEIGHT) {
+        if(ball.y + ball.height >= player2.y && ball.y <= player2.y + PAD_HEIGHT) {
             ball.x = WINDOW_WIDTH - PAD_WIDTH - ball.width;
             ball.vx *= -1;
             
@@ -184,7 +186,7 @@ void update(void) {
             reset();
         }
     } else if(ball.x <= PAD_WIDTH) {
-        if(ball.y >= player1.y && ball.y <= player1.y + PAD_HEIGHT) {
+        if(ball.y + ball.height >= player1.y && ball.y <= player1.y + PAD_HEIGHT) {
             ball.x = PAD_WIDTH;
             ball.vx *= -1;
             
@@ -227,17 +229,12 @@ void render_player(Player player) {
         PAD_HEIGHT
     };
 
-    SDL_SetRenderDrawColor(renderer, 200, 200, 50, 255);
+    SDL_SetRenderDrawColor(renderer, 141, 91, 151, 255);
     SDL_RenderFillRect(renderer, &player_rect);
 }
 
-void render(void) {
-    // TODO:
-    //  - particles
-    //  - ball trace speed
-
-    // render background
-    SDL_SetRenderDrawColor(renderer, 80, 15, 50, 255);
+void render_background(void) {
+    SDL_SetRenderDrawColor(renderer, 11, 0, 11, 255);
     SDL_RenderClear(renderer);
 
     SDL_Rect middle_rect = {
@@ -246,8 +243,17 @@ void render(void) {
         8,
         WINDOW_HEIGHT
     };
-    SDL_SetRenderDrawColor(renderer, 120, 55, 90, 255);
+    SDL_SetRenderDrawColor(renderer, 40, 28, 42, 255);
     SDL_RenderFillRect(renderer, &middle_rect);
+}
+
+void render(void) {
+    // TODO:
+    //  - particles
+    //  - ball trace speed
+
+    render_background();
+
 
     SDL_Rect ball_rect = {
         (int) ball.x,
@@ -255,7 +261,7 @@ void render(void) {
         (int) ball.width,
         (int) ball.height
     };
-    SDL_SetRenderDrawColor(renderer, 90, 200, 200, 255);
+    SDL_SetRenderDrawColor(renderer, 130, 84, 139, 255);
     SDL_RenderFillRect(renderer, &ball_rect);
 
     // render player1
